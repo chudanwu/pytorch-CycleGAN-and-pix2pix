@@ -19,6 +19,7 @@ def weights_init(m):
 
 
 def get_norm_layer(norm_type='instance'):
+    # ##affine setting is deferent!
     if norm_type == 'batch':
         norm_layer = functools.partial(nn.BatchNorm2d, affine=True)
     elif norm_type == 'instance':
@@ -90,6 +91,8 @@ def print_network(net):
 # When LSGAN is used, it is basically same as MSELoss,
 # but it abstracts away the need to create the target label tensor
 # that has the same size as the input
+
+#lsgan->for G label_val=patch, otherwise, label_val=1/0
 class GANLoss(nn.Module):
     def __init__(self, use_lsgan=True, target_real_label=1.0, target_fake_label=0.0,
                  tensor=torch.FloatTensor):
@@ -107,13 +110,16 @@ class GANLoss(nn.Module):
     def get_target_tensor(self, input, target_is_real):
         target_tensor = None
         if target_is_real:
+            # input img from dataset or 1
             create_label = ((self.real_label_var is None) or
                             (self.real_label_var.numel() != input.numel()))
             if create_label:
+                # which means input!=target value or fist use of GANLoss instance
                 real_tensor = self.Tensor(input.size()).fill_(self.real_label)
-                self.real_label_var = Variable(real_tensor, requires_grad=False)
+                self.real_label_var = Variable(real_tensor, requires_grad=False)#target doesnt need grad
             target_tensor = self.real_label_var
         else:
+            # input img from G
             create_label = ((self.fake_label_var is None) or
                             (self.fake_label_var.numel() != input.numel()))
             if create_label:
@@ -123,6 +129,7 @@ class GANLoss(nn.Module):
         return target_tensor
 
     def __call__(self, input, target_is_real):
+        # return loss according to the chosen target
         target_tensor = self.get_target_tensor(input, target_is_real)
         return self.loss(input, target_tensor)
 
@@ -171,7 +178,7 @@ class ResnetGenerator(nn.Module):
         self.model = nn.Sequential(*model)
 
     def forward(self, input):
-        if self.gpu_ids and isinstance(input.data, torch.cuda.FloatTensor):
+        if self.gpu_ids and isinstance(input.data, torch.cuda.FloatTensor):#
             return nn.parallel.data_parallel(self.model, input, self.gpu_ids)
         else:
             return self.model(input)
@@ -206,6 +213,7 @@ class ResnetBlock(nn.Module):
             conv_block += [nn.ReflectionPad2d(1)]
         elif padding_type == 'replicate':
             conv_block += [nn.ReplicationPad2d(1)]
+
         elif padding_type == 'zero':
             p = 1
         else:
@@ -268,6 +276,8 @@ class UnetSkipConnectionBlock(nn.Module):
         upnorm = norm_layer(outer_nc)
 
         if outermost:
+            # 1st convblock did not start with relu but conv2d
+            # last convblock did not end with norm but tanh
             upconv = nn.ConvTranspose2d(inner_nc * 2, outer_nc,
                                         kernel_size=4, stride=2,
                                         padding=1)
@@ -275,11 +285,13 @@ class UnetSkipConnectionBlock(nn.Module):
             up = [uprelu, upconv, nn.Tanh()]
             model = down + [submodule] + up
         elif innermost:
+            # middle convblock didnot have submodel
             upconv = nn.ConvTranspose2d(inner_nc, outer_nc,
                                         kernel_size=4, stride=2,
                                         padding=1)
             down = [downrelu, downconv]
             up = [uprelu, upconv, upnorm]
+            # batch/instance norm after conv2 before relu
             model = down + up
         else:
             upconv = nn.ConvTranspose2d(inner_nc * 2, outer_nc,
@@ -327,6 +339,7 @@ class NLayerDiscriminator(nn.Module):
                 nn.LeakyReLU(0.2, True)
             ]
 
+        # last conv layer stride=1
         nf_mult_prev = nf_mult
         nf_mult = min(2**n_layers, 8)
         sequence += [
@@ -339,6 +352,7 @@ class NLayerDiscriminator(nn.Module):
         sequence += [nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw)]
 
         if use_sigmoid:
+            # last layer end with sigmoid
             sequence += [nn.Sigmoid()]
 
         self.model = nn.Sequential(*sequence)
