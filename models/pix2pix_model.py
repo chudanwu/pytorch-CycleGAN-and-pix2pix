@@ -80,6 +80,7 @@ class Pix2PixModel(BaseModel):
     def backward_D(self):
         # Fake
         # stop backprop to the generator by detaching fake_B
+        # 如果一个变量调用了detach()函数，那么形成该变量结点的图就脱离了，梯度也就不会传递到该变量前面去了。
         fake_AB = self.fake_AB_pool.query(torch.cat((self.real_A, self.fake_B), 1))
         self.pred_fake = self.netD.forward(fake_AB.detach())
         self.loss_D_fake = self.criterionGAN(self.pred_fake, False)

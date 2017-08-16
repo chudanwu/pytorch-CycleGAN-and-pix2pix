@@ -82,6 +82,9 @@ class CycleGANModel(BaseModel):
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
 
     def forward(self):
+        # 每次用这个model实例时，就把real_A/B设置为 self.input_A/B
+        # 所以对实例backward是没有用的。
+        # 实际上的backward函数另外实现为backward_D_basic backward_G
         self.real_A = Variable(self.input_A)
         self.real_B = Variable(self.input_B)
 
